@@ -1,0 +1,93 @@
+name: Make Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_name:
+        description: 'Release name'
+        required: false
+      release_tag:
+        description: 'Release tag'
+        required: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment: release
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: zulu
+          java-version: '25'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: chmod Gradle Wrapper
+        run: chmod +x gradlew
+
+      - name: Download Dependency
+        id: zbjar
+        uses: robinraju/release-downloader@v1
+        with:
+          repository: 'zed-0xff/ZombieBuddy'
+          tag: 'v2.3.3'
+          fileName: 'ZombieBuddy.jar'
+
+      - name: Materialize Key
+        env:
+          KEY_BASE64: ${{ secrets.ZB_KEY }}
+        run: |
+          key_file="key.der"
+          printf '%s' "${KEY_BASE64}" | base64 --decode > "${key_file}"
+          chmod 600 "${key_file}"
+
+      - name: Build
+        run: |
+          ./gradlew build \
+          -PZombieBuddyJarPath="${{ fromJson(steps.zbjar.outputs.downloaded_files)[0] }}" \
+          -PzbsSteamID64=76561197988649366 -PzbsPrivateKeyFile="key.der"
+
+      - name: Upload Artifact
+        id: upload_artifact
+        uses: actions/upload-artifact@v7
+        with:
+          path: build/libs
+
+  create_release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    needs: build
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v6
+    
+    - name: Download Artifacts
+      uses: actions/download-artifact@v8
+      with:
+        name: artifact
+        path: ./artifacts
+
+    - name: Zip Release Files
+      run: |
+        zip -j release.zip artifacts/*
+
+    - name: Release
+      uses: softprops/action-gh-release@v3
+      with:
+        name: ${{ github.event.inputs.release_name }}
+        tag_name: ${{ github.event.inputs.release_tag }}
+        generate_release_notes: true
+        token: ${{ secrets.GITHUB_TOKEN }}
+        files: |
+          artifacts/*.jar
+          artifacts/*.jar.zbs
+          release.zip

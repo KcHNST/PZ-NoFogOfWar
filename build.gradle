@@ -1,0 +1,48 @@
+plugins {
+    id 'java'
+    id 'io.github.zed-0xff.zb-gradle-plugin' version '1.0.0'
+}
+
+zbSigning {
+    jarTask = 'jar'
+}
+
+group = 'pzmod.nofogofwar'
+version = '1.0'
+
+repositories {
+    mavenCentral()
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs = ['src']
+        }
+    }
+    dummy {
+        java {
+            srcDirs = ['src_dummy']
+        }
+    }
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+dependencies {
+    compileOnly files(property("ZombieBuddyJarPath"))
+
+    // For this project, because the PZ class dependency is so small,
+    // we opt to use PZ dummy classes with any required access set to public.
+    compileOnly sourceSets.dummy.output
+}
+
+jar {
+    dependsOn tasks.named('compileDummyJava')
+    archiveBaseName = "nofogofwar"
+    archiveVersion = ""
+}
